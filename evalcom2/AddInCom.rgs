@@ -1,0 +1,26 @@
+HKCR
+{
+	Addin.Evalcom2.Evaluator.1 = s 'AddInCom Class'
+	{
+		CLSID = s '{D5C3551C-4FCB-41A4-B798-D97CE85FA279}'
+	}
+	Addin.Evalcom2.Evaluator = s 'AddInCom Class'
+	{		
+		CurVer = s 'Addin.Evalcom2.Evaluator.1'
+	}
+	NoRemove CLSID
+	{
+		ForceRemove {D5C3551C-4FCB-41A4-B798-D97CE85FA279} = s 'AddInCom Class'
+		{
+			ProgID = s 'Addin.Evalcom2.Evaluator.1'
+			VersionIndependentProgID = s 'Addin.Evalcom2.Evaluator'
+			ForceRemove Programmable
+			InprocServer32 = s '%MODULE%'
+			{
+				val ThreadingModel = s 'Apartment'
+			}
+			TypeLib = s '{FFD98BF2-E0D2-4ECC-9055-33CB1B694BA7}'
+			Version = s '1.0'
+		}
+	}
+}

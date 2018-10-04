@@ -1,0 +1,53 @@
+// evalcom2.idl : IDL source for evalcom2
+//
+
+// This file will be processed by the MIDL tool to
+// produce the type library (evalcom2.tlb) and marshalling code.
+
+import "oaidl.idl";
+import "ocidl.idl";
+
+[
+	object,
+	uuid(0577ACA3-9E28-4645-9338-1B4AB5A47016),
+	dual,
+	nonextensible,
+	pointer_default(unique)
+]
+interface IAddInCom : IDispatch{
+};
+[
+	object,
+	uuid(64963083-6A5C-4D96-B50C-F984A21B9E78),
+	dual,
+	nonextensible,
+	pointer_default(unique)
+]
+interface IErrorDescription : IDispatch{
+	[propget, id(1)] HRESULT Line([out, retval] LONG* pVal);
+	[propget, id(2)] HRESULT Column([out, retval] LONG* pVal);
+	[propget, id(3)] HRESULT Description([out, retval] BSTR* pVal);
+};
+[
+	uuid(FFD98BF2-E0D2-4ECC-9055-33CB1B694BA7),
+	version(1.0),
+]
+library evalcom2Lib
+{
+	importlib("stdole2.tlb");
+	[
+		uuid(D5C3551C-4FCB-41A4-B798-D97CE85FA279)		
+	]
+	coclass AddInCom
+	{
+		[default] interface IAddInCom;
+	};
+	[
+		uuid(72A70046-8C4D-4723-AF1F-A58558B7E910)
+	]
+	coclass ErrorDescription
+	{
+		[default] interface IErrorDescription;
+	};
+};
+

@@ -1,0 +1,176 @@
+﻿#include <math.h>
+#include <locale.h>
+
+#include "..\bytecode.h"
+#include "..\context.h"
+
+using namespace Bytecode;
+
+class CLocale {
+	_locale_t _l;
+public:
+	CLocale() { _l = _create_locale(LC_NUMERIC, "C"); }
+	~CLocale() { _free_locale(_l); }
+	operator _locale_t() { return _l; }
+};
+
+COMPILER Expression
+
+	Bytegen<Instruction> gen;
+	Context context;
+	CLocale c_locale;
+
+IGNORECASE
+
+CHARACTERS
+	digit = "0123456789" .
+	letter = 'A'..'Z' + 'a'..'z' + 'А'..'Я' + 'а'..'я' .
+	anybutsb = ANY - ']' .
+
+TOKENS
+	number = digit { digit } [ '.' {digit} ] [ 'e' ['-'] {digit} ].
+	name = letter { letter | digit } .
+	longname = '[' anybutsb { anybutsb } ']' .
+
+COMMENTS FROM "(*" TO "*)"
+
+IGNORE ' '+'\t'+'\r'+'\n'
+
+PRODUCTIONS
+	Expression
+		=	If
+		.
+	If	=	(	"ЕСЛИ" 
+				Expression
+				"ТО"			(. gen.write(JZ); auto elsedist = gen.write(unsigned short(0)); .)
+								(. size_t thenpos = gen.size(); .)
+				Expression	
+								(. gen.write(JUMP); auto endifdist = gen.write(unsigned short(0)); .)
+								(. size_t elsepos = gen.size(); .)
+								(. bool hasElse = false; .)
+				[				(. hasElse = true; .)
+					"ИНАЧЕ"	
+					Expression
+				]				(. if(!hasElse) { gen.write(PUSH); gen.write(0.0); } .)
+								(. size_t endifpos = gen.size(); .)
+								(. *elsedist = unsigned short(elsepos - thenpos); .)
+								(. *endifdist = unsigned short(endifpos - elsepos); .)
+			)
+		|	Logical
+		.
+	Logical
+		=	Not							
+			{	"И" Not			(. gen.write(AND); .)
+			|	"ИЛИ"  Not		(. gen.write(OR); .)
+			}
+		.
+	Not
+		=	"НЕ" Comp			(. gen.write(NOT); .)
+		|	Comp
+		.
+	Comp
+		=	Add						
+			{	'>'  Add		(. gen.write(GT); .)
+			|	'<'  Add		(. gen.write(LT); .)
+			|	'='  Add		(. gen.write(EQ); .)
+			|	"<>" Add		(. gen.write(NE); .)
+			|	">=" Add		(. gen.write(GE); .)
+			|	"<=" Add		(. gen.write(LE); .)
+			}
+		.
+	Add
+		=	Mul				
+			{	'+' Mul			(. gen.write(ADD); .)
+			|	'-' Mul			(. gen.write(SUB); .)
+			}
+		.
+	Mul
+		=	Pow
+			{	'*' Pow			(. gen.write(MUL); .)
+			|	'/' Pow			(. gen.write(DIV); .)
+			|	'%' Pow			(. gen.write(MOD); .)
+			|	'\\' Pow		(. gen.write(IDIV); .)
+			}
+		.
+	Pow
+		=	Neg
+			{	'^' Neg			(. gen.write(POW); .)
+			}
+		.
+	Neg
+		=	'-'					(. gen.write(PUSH); gen.write(-1.0); .) 
+			Term				(. gen.write(MUL); .)
+		|	Term
+		.
+	Term
+		= 	'(' Expression ')'
+		|	"NULL"				(. gen.write(PUSHNULL); .)
+		|	Func
+		| 	number				(. gen.write(PUSH); gen.write(_wtof_l(t->val, c_locale)); .)
+		|	(	name			(. gen.write(PUSHVAR); gen.write(context.varindex(t, false)); .)
+			|	longname		(. gen.write(PUSHVAR); gen.write(context.varindex(t, true)); .) 
+			)				
+		.
+	Func
+		=	"?" "("						
+			Expression ","		(. gen.write(JZ); auto elsedist = gen.write(unsigned short(0)); .)
+								(. size_t thenpos = gen.size(); .)
+			Expression ","		(. gen.write(JUMP); auto endifdist = gen.write(unsigned short(0)); .)
+								(. size_t elsepos = gen.size(); .)
+			Expression ")"		(. size_t endifpos = gen.size(); .)
+								(. *elsedist = unsigned short(elsepos - thenpos); .)
+								(. *endifdist = unsigned short(endifpos - elsepos); .)
+		|	"МИН" "(" 
+			Expression
+			{	"," 
+				Expression		(. gen.write(MIN); .)
+			}	")"
+		|	"МАКС" "(" 
+			Expression
+			{	"," 
+				Expression		(. gen.write(MAX); .)
+			}	")"
+		|	"СУБМАКС" "("
+			Expression ","		// which element to retrieve 
+			Expression			(. double count = 1.; .)
+			{	","
+				Expression		(. count += 1.; .)
+			}	")"				(. gen.write(PUSH); gen.write(count); .)
+								(. gen.write(SUBMAX); .)
+		|	"СУБМИН" "("
+			Expression ","		// which element to retrieve 
+			Expression			(. double count = 1.; .)
+			{	","
+				Expression		(. count += 1.; .)
+			}	")"				(. gen.write(PUSH); gen.write(count); .)
+								(. gen.write(SUBMIN); .)
+		|	"ОКР" '('
+			Expression			(. bool hasIncrement = false; .)
+			[	',' Expression	(. hasIncrement = true; .)
+			]					(. if(!hasIncrement) { gen.write(PUSH); gen.write(0.0); } .)
+			')'					(. gen.write(ROUND); .)
+		|	"ОКРВВЕРХ" '('
+			Expression			(. bool hasIncrement = false; .)
+			[	',' Expression	(. hasIncrement = true; .)
+			]					(. if(!hasIncrement) { gen.write(PUSH); gen.write(0.0); } .)
+			')'					(. gen.write(CEIL); .)
+		|	"ОКРВНИЗ" '(' 
+			Expression			(. bool hasIncrement = false; .)
+			[	',' Expression	(. hasIncrement = true; .)
+			]					(. if(!hasIncrement) { gen.write(PUSH); gen.write(0.0); } .)
+			')'					(. gen.write(FLOOR); .)
+		|	"СТЕПЕНЬ" '(' 
+			Expression "," 
+			Expression ")"		(. gen.write(POW); .)
+		|	"КОРЕНЬ" '(' 
+			Expression			(. bool hasExp = false; .)
+			[	',' Expression	(. hasExp = true; .)
+			]					(. if(!hasExp) { gen.write(PUSH); gen.write(2.0); } .)
+			')'					(. gen.write(ROOT); .)
+		|	"РАЗРЯД" '(' 
+			Expression "," 
+			Expression ")"		(. gen.write(NMPOS); .)
+		.
+
+END Expression
+.
